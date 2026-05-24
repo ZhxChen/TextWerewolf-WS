@@ -11,3 +11,17 @@ AGENTS.md
 
 # Docker compose with real credentials
 docker-compose.yml
+
+# Client
+client/dist-ssr
+client/*.local
+
+# Editor
+.vscode/*
+!.vscode/extensions.json
+.idea
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?

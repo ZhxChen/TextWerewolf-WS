@@ -1,126 +1,147 @@
 # 狼人杀
 
-实时多人在线狼人杀游戏。后端 Koa2 + Socket.IO + MongoDB，前端 React + Zustand。
+实时多人在线狼人杀游戏。
 
-## 快速启动（Docker）
+## 推荐部署方式：Docker Compose
 
-### 1. 克隆项目
+项目镜像已通过 GitHub Workflow 构建并发布到 GitHub Container Registry：
 
-```bash
-git clone <repo-url> werewolf
-cd werewolf
+```text
+ghcr.io/zhxchen/textwerewolf-ws:latest
 ```
 
-### 2. 构建前端
+推荐使用 Docker Compose 一键部署应用和 MongoDB。
 
-需要 Node.js 18+ 环境：
+### 1. 创建 `docker-compose.yml`
 
-```bash
-cd client
-npm install
-npm run build
-cd ..
+```yaml
+services:
+  mongodb:
+    image: mongo:7
+    container_name: werewolf-mongo
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: werewolf_admin
+      MONGO_INITDB_ROOT_PASSWORD: change-this-mongo-password
+      MONGO_INITDB_DATABASE: werewolf
+    volumes:
+      - mongo_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  app:
+    image: ghcr.io/zhxchen/textwerewolf-ws:latest
+    container_name: werewolf-app
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 6100
+      MONGODB_URI: mongodb://werewolf_admin:change-this-mongo-password@mongodb:27017/werewolf?authSource=admin
+      JWT_SECRET: change-this-jwt-secret
+      CRYPTO_SECRET: change-this-crypto-secret
+      CORS_ORIGIN: "*"
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    ports:
+      - "6100:6100"
+
+volumes:
+  mongo_data:
 ```
 
-构建产物会生成在 `client/dist/` 目录，Docker 中 nginx 会直接使用。
+### 2. 修改密钥和密码
 
-### 3. 配置环境变量
+请至少修改以下配置：
 
-```bash
-cp docker-compose.example.yml docker-compose.yml
-```
+| 配置项 | 说明 |
+| --- | --- |
+| `MONGO_INITDB_ROOT_PASSWORD` | MongoDB root 密码 |
+| `MONGODB_URI` | MongoDB 连接地址，密码需要和上面保持一致 |
+| `JWT_SECRET` | JWT 签名密钥 |
+| `CRYPTO_SECRET` | 数据加密密钥 |
+| `CORS_ORIGIN` | 允许访问的前端来源，反代部署时建议改成你的域名 |
 
-编辑 `docker-compose.yml`，将 `<your-xxx>` 占位符替换为你自己的值：
-
-| 配置项 | 说明 | 示例 |
-|--------|------|------|
-| `MONGO_INITDB_ROOT_USERNAME` | MongoDB 用户名 | `werewolf_admin` |
-| `MONGO_INITDB_ROOT_PASSWORD` | MongoDB 密码 | 自定义强密码 |
-| `MONGODB_URI` | MongoDB 连接串，需与上面的用户名密码一致 | `mongodb://werewolf_admin:密码@mongodb:27017/werewolf?authSource=admin` |
-| `JWT_SECRET` | JWT 签名密钥 | 随机字符串 |
-| `CRYPTO_SECRET` | 数据加密密钥 | 随机字符串 |
-| `CORS_ORIGIN` | 允许的跨域来源，`*` 为不限制 | `*` 或 `https://your-domain.com` |
-
-生成随机密钥：
+### 3. 启动服务
 
 ```bash
-node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+docker compose up -d
 ```
 
-### 4. 启动服务
+启动后访问：
 
-```bash
-docker compose up -d --build
+```text
+http://服务器IP:6100
 ```
 
-启动后访问 http://localhost 即可。
+首次启动时会自动创建管理员账号：
 
-### 5. 初始化测试账号（可选）
+| 用户名 | 密码 |
+| --- | --- |
+| `admin` | `123456` |
 
-```bash
-node scripts/seed.js
+建议登录后尽快修改默认密码，或在生产环境中自行调整初始化逻辑。
+
+## 使用 Nginx 反向代理与 HTTPS
+
+生产环境建议使用 Nginx 反向代理到应用容器的 `6100` 端口，并通过 TLS/SSL 提供 HTTPS 访问。
+
+### Nginx 配置示例
+
+如果 Docker Compose 将应用端口映射为：
+
+```yaml
+ports:
+  - "6100:6100"
 ```
 
-创建以下默认账号（密码均为 `123456`）：
-
-| 账号 | 角色 | 说明 |
-|------|------|------|
-| `admin` | 管理员 | 可创建房间、管理用户 |
-| `test1` ~ `test3` | 普通玩家 | 用于测试 |
-
-## 生产环境部署
-
-Docker 启动后，通过宿主机 nginx 反向代理并配置 SSL。
-
-### 安装 certbot 申请证书
-
-```bash
-# Ubuntu/Debian
-apt install certbot python3-certbot-nginx
-certbot --nginx -d your-domain.com
-```
-
-### 宿主机 nginx 配置示例
+则宿主机 Nginx 可以这样配置：
 
 ```nginx
 server {
     listen 80;
     server_name your-domain.com;
-    return 301 https://$host$request_uri;
+
+    location /.well-known/acme-challenge/ {
+        root /var/www/html;
+    }
+
+    location / {
+        return 301 https://$host$request_uri;
+    }
 }
 
 server {
     listen 443 ssl http2;
     server_name your-domain.com;
 
-    ssl_certificate     /etc/letsencrypt/live/your-domain.com/fullchain.pem;
+    ssl_certificate /etc/letsencrypt/live/your-domain.com/fullchain.pem;
     ssl_certificate_key /etc/letsencrypt/live/your-domain.com/privkey.pem;
 
-    # 安全响应头
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_prefer_server_ciphers off;
+    ssl_session_cache shared:SSL:10m;
+    ssl_session_timeout 1d;
+
+    add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
     add_header X-Frame-Options DENY;
     add_header X-Content-Type-Options nosniff;
-    add_header X-XSS-Protection "1; mode=block";
-    add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+    add_header Referrer-Policy no-referrer-when-downgrade;
 
-    # 前端静态文件（指向 Docker 中 nginx 暴露的端口，或直接代理到 Docker 内网）
+    client_max_body_size 10m;
+
     location / {
-        proxy_pass http://127.0.0.1:80;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-    }
-
-    # API 反向代理
-    location /api/ {
         proxy_pass http://127.0.0.1:6100;
+        proxy_http_version 1.1;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
     }
 
-    # WebSocket 反向代理
     location /socket.io/ {
         proxy_pass http://127.0.0.1:6100;
         proxy_http_version 1.1;
@@ -128,76 +149,80 @@ server {
         proxy_set_header Connection "upgrade";
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 600s;
     }
 }
 ```
 
-如果宿主机 nginx 直接代理到 Docker 内部（不暴露端口到宿主机），可将 `proxy_pass` 改为 Docker 内网地址，例如 `proxy_pass http://172.17.0.1:6100`，或使用 `docker network` 方式连接。
+反代部署时建议将应用环境变量改为：
 
-## 本地开发
+```yaml
+CORS_ORIGIN: "https://your-domain.com"
+```
 
-### 后端
+如果不希望应用端口直接暴露给公网，可以只在本机监听：
+
+```yaml
+ports:
+  - "127.0.0.1:6100:6100"
+```
+
+## 使用外部 MongoDB
+
+如果不想用 Docker Compose 部署 MongoDB，可以只运行应用容器，并把 `MONGODB_URI` 指向已有 MongoDB 服务。
+
+### 方式一：Docker Compose 只部署应用
+
+```yaml
+services:
+  app:
+    image: ghcr.io/zhxchen/textwerewolf-ws:latest
+    container_name: werewolf-app
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 6100
+      MONGODB_URI: mongodb://username:password@mongo-host:27017/werewolf?authSource=admin
+      JWT_SECRET: change-this-jwt-secret
+      CRYPTO_SECRET: change-this-crypto-secret
+      CORS_ORIGIN: "https://your-domain.com"
+    ports:
+      - "127.0.0.1:6100:6100"
+```
+
+### 方式二：直接运行 Docker 容器
 
 ```bash
-cd server
-cp ../server/.env.example .env   # 编辑 .env 配置 MongoDB 连接等
-npm install
-npm run dev                      # 启动开发服务器，端口 6100
+docker run -d \
+  --name werewolf-app \
+  --restart unless-stopped \
+  -p 127.0.0.1:6100:6100 \
+  -e NODE_ENV=production \
+  -e PORT=6100 \
+  -e MONGODB_URI='mongodb://username:password@mongo-host:27017/werewolf?authSource=admin' \
+  -e JWT_SECRET='change-this-jwt-secret' \
+  -e CRYPTO_SECRET='change-this-crypto-secret' \
+  -e CORS_ORIGIN='https://your-domain.com' \
+  ghcr.io/zhxchen/textwerewolf-ws:latest
 ```
 
-需要本地 MongoDB 实例（默认 `localhost:27017`）。
+常见 MongoDB 连接示例：
 
-### 前端
+```text
+# 使用账号密码，认证库为 admin
+mongodb://username:password@mongo-host:27017/werewolf?authSource=admin
 
-```bash
-cd client
-npm install
-npm run dev                      # 启动开发服务器，端口 5173
+# MongoDB Atlas / 云数据库通常使用 SRV 地址
+mongodb+srv://username:password@cluster.example.mongodb.net/werewolf
 ```
 
-开发模式下前端会自动代理 `/api` 和 `/socket.io` 请求到后端 6100 端口。
-
-## 项目结构
-
-```
-werewolf/
-├── shared/                # 共享枚举和常量（角色、阶段、技能）
-├── server/                # Koa2 后端
-│   └── src/
-│       ├── config/        # 配置与常量
-│       ├── controllers/   # 请求处理
-│       ├── middleware/     # 认证、错误处理
-│       ├── models/        # Mongoose 数据模型
-│       ├── routes/        # 路由定义
-│       ├── services/      # 业务逻辑
-│       ├── utils/         # 工具函数
-│       └── websocket/     # Socket.IO 事件处理
-├── client/                # React 前端
-│   └── src/
-│       ├── api/           # API 请求层
-│       ├── hooks/         # 自定义 Hooks
-│       ├── pages/         # 页面组件
-│       └── stores/        # Zustand 状态管理
-├── nginx/                 # Nginx 反向代理配置
-├── scripts/               # 数据初始化脚本
-├── Dockerfile
-├── docker-compose.example.yml
-└── .gitignore
-```
-
-## 游戏模式
-
-**9 人标准局**：3 狼人 · 预言家 · 女巫 · 猎人 · 3 村民
-
-```
-夜晚：预言家查验 → 狼人刀人 → 女巫用药
-白天：公布死讯 → 依次发言 → 投票放逐 → 遗言
-```
+请确保应用容器所在机器可以访问 MongoDB 地址，并且 MongoDB 防火墙或白名单允许该机器连接。
 
 ## 致谢
 
-本项目参考了 [gy-lrs-lcoco2](https://github.com/goyoung/gy-lrs-lcoco2)（by goyoung）的狼人杀简化实现。
+本项目参考了 [gy-lrs-lcoco2](https://github.com/guyang66/gy-lrs-lcoco2) 的狼人杀简化实现。
 
 ## 许可证
 
