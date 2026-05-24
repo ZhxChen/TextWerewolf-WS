@@ -5,6 +5,7 @@ import { getRoomList, createRoom, joinRoom } from '../api/room'
 import { changePassword, updateProfile } from '../api/auth'
 import { useAuthStore } from '../stores/useAuthStore'
 import { useToast } from '../components/Toast'
+import { useLobbySocket } from '../hooks/useLobbySocket'
 
 const ROOM_STATUS_COLOR = {
   0: 'app-yellow',
@@ -64,6 +65,10 @@ export default function LobbyPage() {
 
     return () => clearTimeout(timer)
   }, [])
+
+  useLobbySocket(() => {
+    fetchRooms()
+  })
 
   const handleCreate = async () => {
     if (!form.password) return

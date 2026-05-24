@@ -58,6 +58,7 @@ export async function createRoom(ctx) {
     speakActionTime: clampedSpeakTime,
     voteActionTime: clampedVoteTime
   })
+  io?.to('lobby').emit('refreshLobby')
   ctx.body = Result.success(room._id)
 }
 
@@ -177,6 +178,7 @@ export async function joinRoom(ctx) {
 
   attachSocketToRoom(userSockets.get(username), id)
   io?.to('room:' + id).emit('refreshRoom')
+  io?.to('lobby').emit('refreshLobby')
   ctx.body = Result.success('ok')
 }
 
@@ -237,6 +239,7 @@ export async function quitRoom(ctx) {
     if (targetSocket) targetSocket.emit('kicked')
   }
   io?.to('room:' + id).emit('refreshRoom')
+  io?.to('lobby').emit('refreshLobby')
   ctx.body = Result.success('ok')
 }
 
@@ -272,6 +275,7 @@ export async function deleteRoom(ctx) {
   }
   await Room.findByIdAndDelete(id)
   io?.to('room:' + id).emit('roomDeleted')
+  io?.to('lobby').emit('refreshLobby')
   ctx.body = Result.success('ok')
 }
 

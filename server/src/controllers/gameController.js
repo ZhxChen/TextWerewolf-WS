@@ -72,6 +72,7 @@ export async function gameStart(ctx) {
   await Room.findByIdAndUpdate(roomId, { status: ROOM_STATUS.GOING, gameId: String(game._id) })
 
   io?.to('room:' + roomId).emit('gameStart')
+  io?.to('lobby').emit('refreshLobby')
   await gameService.startStageTimer(String(game._id), game)
   ctx.body = Result.success({ gameId: String(game._id) })
 }
@@ -764,6 +765,7 @@ export async function gameDestroy(ctx) {
 
   await Room.findByIdAndUpdate(game.roomId, { status: ROOM_STATUS.READY, gameId: null })
   io?.to('room:' + game.roomId).emit('reStart')
+  io?.to('lobby').emit('refreshLobby')
   ctx.body = Result.success('ok')
 }
 
@@ -784,6 +786,7 @@ export async function gameAgain(ctx) {
   }
   await Room.findByIdAndUpdate(roomId, { status: ROOM_STATUS.READY, gameId: null })
   io?.to('room:' + roomId).emit('reStart')
+  io?.to('lobby').emit('refreshLobby')
   ctx.body = Result.success('ok')
 }
 
@@ -924,6 +927,7 @@ export async function restartGame(ctx) {
 
   io?.to('room:' + roomId).emit('reStart')
   io?.to('room:' + roomId).emit('gameStart')
+  io?.to('lobby').emit('refreshLobby')
   await gameService.startStageTimer(String(game._id), game)
 
   ctx.body = Result.success({ gameId: String(game._id) })

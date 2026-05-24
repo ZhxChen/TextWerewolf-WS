@@ -2,7 +2,7 @@ import Room from '../models/Room.js'
 import User from '../models/User.js'
 import { ROOM_STATUS } from '../config/constants.js'
 import { checkPassword, createPassword, isEmpty } from '../utils/helper.js'
-import { disconnectTimers, playerStatus, userSockets } from '../state.js'
+import { disconnectTimers, io, playerStatus, userSockets } from '../state.js'
 
 const BCRYPT_HASH_PATTERN = /^\$2[aby]\$\d{2}\$/
 
@@ -48,6 +48,7 @@ export async function clearSeat(roomId, username) {
     const newSeats = [...room.seats]
     newSeats[idx] = null
     await Room.findByIdAndUpdate(roomId, { seats: newSeats })
+    io?.to('lobby').emit('refreshLobby')
   }
 }
 
@@ -132,6 +133,7 @@ export async function clearOfflineSeats(roomId) {
   }
 
   const updatedRoom = await Room.findByIdAndUpdate(roomId, { seats: nextSeats }, { new: true })
+  io?.to('lobby').emit('refreshLobby')
   for (const username of clearedUsernames) {
     const timer = disconnectTimers.get(username)
     if (timer) {

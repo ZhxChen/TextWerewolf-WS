@@ -84,6 +84,7 @@ export function createSocketServer(httpServer) {
     const initialRoomId = typeof socket.handshake.query.roomId === 'string'
       ? socket.handshake.query.roomId
       : null
+    const initialLobby = socket.handshake.query.lobby === 'true'
     if (username) {
       userSockets.set(username, socket)
 
@@ -98,6 +99,11 @@ export function createSocketServer(httpServer) {
       playerStatus.set(username, { online: true, disconnectedAt: null })
     }
     logger.info(`Socket connected: ${username}`)
+
+    if (initialLobby) {
+      socket.join('lobby')
+      logger.info(`${username} joined lobby`)
+    }
 
     if (initialRoomId) {
       ;(async () => {

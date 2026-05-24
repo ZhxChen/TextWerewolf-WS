@@ -138,6 +138,7 @@ export async function deleteUser(ctx) {
     room.seats = room.seats.map((s) => (s === targetUser.username ? null : s))
     await room.save()
   }
+  if (rooms.length > 0) io?.to('lobby').emit('refreshLobby')
   await User.findByIdAndDelete(id)
   ctx.body = Result.success('ok')
 }
@@ -232,6 +233,7 @@ export async function adminDeleteRoom(ctx) {
     return
   }
   io?.to('room:' + id).emit('roomDeleted')
+  io?.to('lobby').emit('refreshLobby')
   await Room.findByIdAndDelete(id)
   ctx.body = Result.success('ok')
 }
@@ -246,5 +248,6 @@ export async function adminCloseRoom(ctx) {
   room.status = ROOM_STATUS.INVALID
   await room.save()
   io?.to('room:' + id).emit('roomClosed')
+  io?.to('lobby').emit('refreshLobby')
   ctx.body = Result.success('ok')
 }

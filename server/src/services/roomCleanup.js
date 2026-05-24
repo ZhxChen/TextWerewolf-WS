@@ -1,6 +1,7 @@
 import { Room } from '../models/index.js'
 import { ROOM_STATUS } from '../config/constants.js'
 import logger from '../utils/logger.js'
+import { io } from '../state.js'
 
 const CLEANUP_INTERVAL_MS = 30 * 60 * 1000       // 30 minutes
 const EMPTY_ROOM_TTL_MS = 2 * 60 * 60 * 1000     // 2 hours  — empty ready room
@@ -27,6 +28,7 @@ async function clearStaleSeatsOnStartup() {
     }
     if (cleared > 0) {
       logger.info(`[roomCleanup] Cleared stale seats in ${cleared} READY room(s) on startup`)
+      io?.to('lobby').emit('refreshLobby')
     }
   } catch (err) {
     logger.error({ err }, '[roomCleanup] Failed to clear stale seats on startup')
@@ -43,11 +45,13 @@ async function runCleanup() {
       status: ROOM_STATUS.READY,
       updatedAt: { $lt: emptyThreshold }
     })
+    let invalidatedEmptyRooms = 0
     for (const room of emptyRooms) {
       const occupied = (room.seats || []).some((s) => s && s !== '')
       if (!occupied) {
         room.status = ROOM_STATUS.INVALID
         await room.save()
+        invalidatedEmptyRooms++
         logger.info(`[roomCleanup] Marked empty room ${room._id} as INVALID`)
       }
     }
@@ -70,6 +74,10 @@ async function runCleanup() {
     })
     if (deleteResult.deletedCount > 0) {
       logger.info(`[roomCleanup] Deleted ${deleteResult.deletedCount} expired INVALID room(s)`)
+    }
+
+    if (invalidatedEmptyRooms > 0 || staleResult.modifiedCount > 0 || deleteResult.deletedCount > 0) {
+      io?.to('lobby').emit('refreshLobby')
     }
   } catch (err) {
     logger.error({ err }, '[roomCleanup] Cleanup error')
