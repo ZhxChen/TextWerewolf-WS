@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Card, Button, Input, Modal, Divider } from 'animal-island-ui'
 import { useNavigate } from 'react-router-dom'
-import { getRoomList, createRoom, joinRoom } from '../api/room'
+import { getRoomList, createRoom, joinRoom, getRecentRoom } from '../api/room'
 import { changePassword, updateProfile } from '../api/auth'
 import { useAuthStore } from '../stores/useAuthStore'
 import { useToast } from '../components/Toast'
@@ -28,6 +28,7 @@ export default function LobbyPage() {
   const setAuth = useAuthStore((s) => s.setAuth)
   const [rooms, setRooms] = useState([])
   const [loading, setLoading] = useState(false)
+  const [lobbyReady, setLobbyReady] = useState(false)
   const [createModal, setCreateModal] = useState(false)
   const [creating, setCreating] = useState(false)
   const [form, setForm] = useState({ name: '', password: '', mode: 'standard_9', nightActionTime: 15, speakActionTime: 60, voteActionTime: 30 })
@@ -59,16 +60,33 @@ export default function LobbyPage() {
   }
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      fetchRooms()
-    }, 0)
+    let cancelled = false
 
-    return () => clearTimeout(timer)
-  }, [])
+    async function initLobby() {
+      try {
+        const roomId = await getRecentRoom()
+        if (cancelled) return
+        if (roomId) {
+          navigate(`/room/${roomId}`, { replace: true })
+          return
+        }
+        setLobbyReady(true)
+        await fetchRooms()
+      } catch {
+        if (!cancelled) setLobbyReady(true)
+      }
+    }
+
+    initLobby()
+
+    return () => {
+      cancelled = true
+    }
+  }, [navigate])
 
   useLobbySocket(() => {
     fetchRooms()
-  })
+  }, lobbyReady)
 
   const handleCreate = async () => {
     if (!form.password) return

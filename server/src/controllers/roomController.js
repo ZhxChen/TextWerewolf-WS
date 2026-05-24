@@ -32,9 +32,12 @@ export async function createRoom(ctx) {
     ctx.body = Result.fail(-1, '密码格式错误，需要4-8位数字或字母')
     return
   }
-  const existingRoom = await Room.findOne({ owner: ctx.userInfo.username, status: { $ne: ROOM_STATUS.INVALID } })
+  const existingRoom = await Room.findOne({
+    status: { $ne: ROOM_STATUS.INVALID },
+    $or: [{ owner: ctx.userInfo.username }, { seats: ctx.userInfo.username }]
+  })
   if (existingRoom) {
-    ctx.body = Result.fail(-1, '您已创建了一个房间，请先删除原有房间')
+    ctx.body = Result.fail(-1, '你已在其他房间中，请先退出原房间')
     return
   }
   if (!ALLOWED_GAME_MODES.includes(mode)) {
@@ -133,6 +136,15 @@ export async function joinRoom(ctx) {
     return
   }
   const username = ctx.userInfo.username
+  const occupiedRoom = await Room.findOne({
+    _id: { $ne: id },
+    status: { $ne: ROOM_STATUS.INVALID },
+    $or: [{ owner: username }, { seats: username }]
+  })
+  if (occupiedRoom) {
+    ctx.body = Result.fail(-1, '你已在其他房间中，请先退出原房间')
+    return
+  }
   const currentSeatIndex = (room.seats || []).indexOf(username)
   if (currentSeatIndex !== -1 && isEmpty(position)) {
     attachSocketToRoom(userSockets.get(username), id)
