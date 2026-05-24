@@ -4,9 +4,10 @@ const chatMessageSchema = new mongoose.Schema({
   roomId: { type: String, required: true },
   gameId: { type: String, required: true },
   sender: { type: String, required: true },
+  senderName: { type: String },
   senderPosition: { type: Number },
   senderRole: { type: String },
-  channel: { type: String, required: true }, // 'public' | 'wolf'
+  channel: { type: String, required: true }, // 'public' | 'wolf' | 'ghost'
   content: { type: String, required: true }
 }, { timestamps: true, collection: 'chat_messages' })
 

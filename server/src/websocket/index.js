@@ -237,6 +237,7 @@ export function createSocketServer(httpServer) {
           roomId,
           gameId: String(gameId),
           sender: username,
+          senderName: socket.userInfo?.name || username,
           senderPosition: player.position,
           senderRole: player.role,
           channel,

@@ -19,7 +19,7 @@ export async function listUsers(ctx) {
     const escaped = username.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
     query.username = new RegExp(escaped, 'i')
   }
-  const users = await User.find(query).select('-password').sort({ createdAt: -1 })
+  const users = await User.find(query).select('-password').sort({ createdAt: 1 })
   ctx.body = Result.success(users)
 }
 

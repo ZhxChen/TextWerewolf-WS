@@ -491,6 +491,21 @@ export default function RoomPage() {
   }
 
   const handleQuit = async () => {
+    if (isRoomOwner) {
+      setConfirmModal({
+        msg: '房主退出将解散房间，所有玩家将被移出。确定要解散吗？',
+        onOk: async () => {
+          setConfirmModal(null)
+          try {
+            await quitRoom({ id: roomId, username: user.username })
+            navigate('/')
+          } catch {
+            navigate('/')
+          }
+        }
+      })
+      return
+    }
     try {
       await quitRoom({ id: roomId, username: user.username })
       navigate('/')
@@ -500,8 +515,10 @@ export default function RoomPage() {
   }
 
   const handleKickPlayer = (username, position) => {
+    const seat = (roomDetail.seat || []).find((s) => s.player === username)
+    const displayName = seat?.name || username
     setConfirmModal({
-      msg: `确定要将 ${position} 号（${username}）踢出房间吗？`,
+      msg: `确定要将 ${position} 号（${displayName}）踢出房间吗？`,
       onOk: async () => {
         setConfirmModal(null)
         try {
@@ -954,10 +971,12 @@ export default function RoomPage() {
           {canManageRoom && gameDetail._id && (
             <Button size="small" danger onClick={handleDestroyGame}>结束</Button>
           )}
-          {canManageRoom && (
+          {canManageRoom && !isRoomOwner && (
             <Button size="small" danger onClick={handleDeleteRoom}>删除房间</Button>
           )}
-          <Button size="small" type="text" onClick={handleQuit}>离开</Button>
+          <Button size="small" type={isRoomOwner ? 'default' : 'text'} danger={isRoomOwner} onClick={handleQuit}>
+            {isRoomOwner ? '解散房间' : '离开'}
+          </Button>
         </div>
       </div>
 
@@ -1407,7 +1426,7 @@ export default function RoomPage() {
                               </span>
                             )}
                             <span style={{ fontWeight: 700, color: isNight ? '#d9cbb6' : '#725d42', marginRight: '6px' }}>
-                              {msg.sender}
+                              {msg.senderName || msg.sender}
                             </span>
                             {isWolfChannel && (
                               <span style={{ color: '#fc736d', fontWeight: 'bold', marginRight: '6px' }}>[狼人]</span>
@@ -1489,8 +1508,8 @@ export default function RoomPage() {
                       <button
                         className="seat-kick-btn"
                         onClick={(e) => { e.stopPropagation(); handleKickPlayer(seat.player, seat.position) }}
-                        title={`踢出 ${seat.player}`}
-                        aria-label={`踢出 ${seat.player}`}
+                        title={`踢出 ${seat.name}`}
+                        aria-label={`踢出 ${seat.name}`}
                       >
                         ×
                       </button>
@@ -1498,7 +1517,7 @@ export default function RoomPage() {
                     <Card color={isSelfSeat ? 'app-green' : seat.player ? 'app-blue' : 'default'}>
                       <div className="seat-card-content">
                         <div className="seat-position-badge">{seat.position}</div>
-                        <div className="seat-player-name">{seat.player || '空座位'}</div>
+                        <div className="seat-player-name">{seat.player ? seat.name : '空座位'}</div>
                         <div className="seat-action-area">
                           {!seat.player && (
                             <Button size="small" type="primary" block onClick={() => handleSitDown(seat.position)}>

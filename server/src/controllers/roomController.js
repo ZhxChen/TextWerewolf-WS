@@ -1,4 +1,4 @@
-import { Room, Game } from '../models/index.js'
+import { Room, Game, User } from '../models/index.js'
 import { Result } from '../utils/response.js'
 import { createPassword, isEmpty } from '../utils/helper.js'
 import { io, userSockets, playerStatus } from '../state.js'
@@ -7,7 +7,7 @@ import * as roomService from '../services/roomService.js'
 
 export async function roomList(ctx) {
   const rooms = await Room.find({ status: { $ne: ROOM_STATUS.INVALID } }).sort({ createdAt: -1 })
-  const list = rooms.map((r) => ({
+  const list = await Promise.all(rooms.map(async (r) => ({
     _id: r._id,
     name: r.name,
     status: r.status,
@@ -17,8 +17,8 @@ export async function roomList(ctx) {
     ob: r.ob,
     count: r.count,
     gameId: r.gameId,
-    seats: parseSeatArray(r.seats, r.count)
-  }))
+    seats: await parseSeatArray(r.seats, r.count)
+  })))
   ctx.body = Result.success(list)
 }
 
@@ -80,7 +80,7 @@ export async function roomInfo(ctx) {
     ctx.body = Result.fail(-1, '无权访问该房间')
     return
   }
-  const seats = parseSeatArray(room.seats, room.count)
+  const seats = await parseSeatArray(room.seats, room.count)
   const onlineStatus = {}
   for (const seat of seats) {
     if (seat.player) {
@@ -218,6 +218,15 @@ export async function quitRoom(ctx) {
   // Admins and room owners may remove another player from a seat
   const canKickOthers = ctx.userInfo.role === 'admin' || room.owner === ctx.userInfo.username
   const targetUsername = (canKickOthers && username) ? username : ctx.userInfo.username
+
+  // If the owner is leaving (not kicking someone else), delete the room
+  if (targetUsername === room.owner && room.owner === ctx.userInfo.username) {
+    await Room.findByIdAndDelete(id)
+    io?.to('room:' + id).emit('roomDeleted')
+    io?.to('lobby').emit('refreshLobby')
+    ctx.body = Result.success('ok')
+    return
+  }
   const updatedRoom = await Room.findByIdAndUpdate(
     id,
     [
@@ -389,12 +398,18 @@ function detachSocketFromRoom(socket, roomId) {
   }
 }
 
-function parseSeatArray(seats = [], count = 9) {
+async function parseSeatArray(seats = [], count = 9) {
   const arr = [...seats]
   while (arr.length < count) arr.push(null)
+  const usernames = arr.filter((s) => s)
+  const users = usernames.length > 0
+    ? await User.find({ username: { $in: usernames } }, { username: 1, name: 1 })
+    : []
+  const nameMap = {}
+  for (const u of users) nameMap[u.username] = u.name || u.username
   return arr.map((player, i) => ({
     position: i + 1,
-    name: player || `${i + 1}号`,
+    name: player ? (nameMap[player] || player) : `${i + 1}号`,
     player: player || null
   }))
 }

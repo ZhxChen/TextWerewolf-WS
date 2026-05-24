@@ -1,4 +1,4 @@
-import { Game, Player, Action, Vision, Room } from '../models/index.js'
+import { Game, Player, Action, Vision, Room, User } from '../models/index.js'
 import { GAME_STATUS, GAME_STAGE, GAME_ROLE, PLAYER_STATUS, PLAYER_ROLE_MAP, SKILL_MAP, VISION_STATUS, GAME_CAMP, GAME_WIN_CONDITION, GAME_TICKET_FLAT, MODE, BROADCAST_MAP, STAGE_MAP, SKILL_ACTION_KEY, SKILL_STATUS, GAME_OUT_REASON } from '../config/constants.js'
 import * as recordService from './recordService.js'
 import * as stageService from './stageService.js'
@@ -40,6 +40,10 @@ export async function createNewGame(roomId, config = {}) {
   const game = await Game.create(gameData)
 
   const seatUsernames = room.seats.filter((s) => s)
+  const users = await User.find({ username: { $in: seatUsernames } }, { username: 1, name: 1 })
+  const nameMap = {}
+  for (const u of users) nameMap[u.username] = u.name || u.username
+
   for (let i = 0; i < seatUsernames.length; i += 1) {
     const username = seatUsernames[i]
     const seatPosition = room.seats.indexOf(username) + 1
@@ -51,7 +55,7 @@ export async function createNewGame(roomId, config = {}) {
       roomId: String(roomId),
       gameId: String(game._id),
       username,
-      name: username,
+      name: nameMap[username] || username,
       role,
       roleName: roleInfo.name,
       camp: roleInfo.camp,
