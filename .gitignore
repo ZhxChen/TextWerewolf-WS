@@ -1,0 +1,13 @@
+node_modules/
+dist/
+.env
+*.log
+.DS_Store
+
+# ide
+.claude/
+CLAUDE.md
+AGENTS.md
+
+# Docker compose with real credentials
+docker-compose.yml

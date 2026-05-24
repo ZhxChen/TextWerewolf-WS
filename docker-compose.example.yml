@@ -1,0 +1,38 @@
+services:
+  mongodb:
+    image: mongo:7
+    container_name: werewolf-mongo
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: <your-mongo-username>
+      MONGO_INITDB_ROOT_PASSWORD: <your-mongo-password>
+      MONGO_INITDB_DATABASE: werewolf
+    volumes:
+      - mongo_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: werewolf-app
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 6100
+      MONGODB_URI: mongodb://<your-mongo-username>:<your-mongo-password>@mongodb:27017/werewolf?authSource=admin
+      JWT_SECRET: <your-jwt-secret>
+      CRYPTO_SECRET: <your-crypto-secret>
+      CORS_ORIGIN: "*"
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    ports:
+      - "6100:6100"
+
+volumes:
+  mongo_data:
