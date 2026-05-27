@@ -443,7 +443,7 @@ function UsersTab() {
             <div style={{ marginBottom: 8, color: '#725d42', fontSize: '0.875rem' }}>
               共 <strong>{batchRows.length}</strong> 条记录，确认后开始导入
             </div>
-            <div style={{ maxHeight: 300, overflowY: 'auto', border: '1px solid #e5d9c8', borderRadius: 6 }}>
+            <div className="batch-table-wrapper" style={{ maxHeight: 300, overflowY: 'auto', border: '1px solid #e5d9c8', borderRadius: 6 }}>
               <table className="batch-table">
                 <thead>
                   <tr>
@@ -701,10 +701,10 @@ export default function AdminPage() {
   ]
 
   return (
-    <div style={{ minHeight: '100vh', padding: '24px', maxWidth: 960, margin: '0 auto' }}>
-      <div className="flex justify-between items-center mb-4">
+    <div className="page-wrapper" style={{ maxWidth: 960, margin: '0 auto' }}>
+      <div className="page-header mb-4">
         <div className="page-title">🛡️ 管理后台</div>
-        <div className="flex gap-8 items-center">
+        <div className="page-header-actions">
           <span style={{ color: '#725d42' }}>👤 {user?.name || user?.username}</span>
           <Button onClick={() => navigate('/')}>返回大厅</Button>
           <Button type="text" onClick={() => { logout(); navigate('/login') }}>退出</Button>

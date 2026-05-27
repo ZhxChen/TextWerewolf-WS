@@ -488,6 +488,17 @@ body.theme-night textarea::placeholder {
   padding: 24px;
 }
 
+.page-wrapper {
+  min-height: 100vh;
+  padding: 24px;
+}
+
+@media (max-width: 640px) {
+  .page-wrapper {
+    padding: 16px;
+  }
+}
+
 .page-header {
   text-align: center;
   margin-bottom: 24px;
@@ -498,6 +509,35 @@ body.theme-night textarea::placeholder {
   font-weight: 700;
   color: #725d42;
   margin-bottom: 8px;
+}
+
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.page-header-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+@media (max-width: 640px) {
+  .page-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .page-header-actions {
+    flex-wrap: wrap;
+    width: 100%;
+  }
+
+  .page-title {
+    font-size: 1.5rem;
+  }
 }
 
 .gap-8 { gap: 8px; }
@@ -720,6 +760,20 @@ body.theme-night textarea::placeholder {
   width: 100%;
 }
 
+@media (max-width: 640px) {
+  .player-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+}
+
+@media (max-width: 380px) {
+  .player-grid {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+}
+
 .color-red { color: #fc736d; }
 .color-green { color: #8ac68a; }
 .color-blue { color: #889df0; }
@@ -759,6 +813,19 @@ body.theme-night textarea::placeholder {
   border: 1px solid var(--panel-border);
   border-radius: 12px;
   margin-bottom: 12px;
+}
+
+@media (max-width: 640px) {
+  .game-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .game-header > div:last-child {
+    flex-wrap: wrap;
+    width: 100%;
+  }
 }
 
 .game-header-meta {
@@ -1321,6 +1388,22 @@ body.theme-night .toast-error { background: #e05a5a; color: #fff; }
   line-height: 1.7;
 }
 
+/* Minimum touch target size for coarse pointers (mobile/touch) */
+@media (pointer: coarse) {
+  .wolf-target-dot,
+  .vote-target-dot {
+    min-width: 36px;
+    min-height: 36px;
+    font-size: 0.8rem;
+  }
+
+  .seat-kick-btn {
+    min-width: 36px;
+    min-height: 36px;
+  }
+}
+
+
 @media (max-width: 640px) {
   .toast-container {
     left: 16px;
@@ -1335,4 +1418,12 @@ body.theme-night .toast-error { background: #e05a5a; color: #fff; }
     box-sizing: border-box;
   }
 }
+
+/* Batch table horizontal scroll on narrow screens */
+.batch-table-wrapper {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
 

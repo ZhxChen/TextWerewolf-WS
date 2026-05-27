@@ -219,10 +219,10 @@ export default function LobbyPage() {
   }
 
   return (
-    <div style={{ minHeight: '100vh', padding: '24px', maxWidth: 900, margin: '0 auto' }}>
-      <div className="flex justify-between items-center mb-4">
+    <div className="page-wrapper" style={{ maxWidth: 900, margin: '0 auto' }}>
+      <div className="page-header mb-4">
         <div className="page-title">🐺 狼人杀大厅</div>
-        <div className="flex gap-8 items-center">
+        <div className="page-header-actions">
           <Button type="text" style={{ color: '#725d42' }} onClick={openProfileModal}>
             👤 {user?.name || user?.username}
           </Button>
