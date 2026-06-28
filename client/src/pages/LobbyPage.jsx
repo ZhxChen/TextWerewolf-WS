@@ -111,6 +111,12 @@ export default function LobbyPage() {
       return true
     }
 
+    // Admin spectates directly without taking a seat
+    if (user?.role === 'admin') {
+      navigate(`/room/${room._id}`)
+      return true
+    }
+
     if (isFull) {
       showToast('房间已满', 'error')
       return false
@@ -135,11 +141,12 @@ export default function LobbyPage() {
   const enterRoom = (room) => {
     const seatPlayers = room.seats?.filter((s) => s.player) || []
     const isMember = room.owner === user?.username || seatPlayers.some((seat) => seat.player === user?.username)
-    if (!isMember && room.status !== 0) {
+    const isAdmin = user?.role === 'admin'
+    if (!isMember && room.status !== 0 && !isAdmin) {
       showToast('游戏进行中，暂不可加入', 'error')
       return
     }
-    if (room.hasPassword && room.owner !== user?.username && !isMember) {
+    if (room.hasPassword && room.owner !== user?.username && !isMember && !isAdmin) {
       setRoomPassword('')
       setPwdError('')
       setPwdModal({ room })
@@ -249,8 +256,9 @@ export default function LobbyPage() {
             const occupiedCount = seatPlayers.length
             const isMember = room.owner === user?.username || seatPlayers.some((seat) => seat.player === user?.username)
             const isFull = occupiedCount >= room.count
-            const blocked = !isMember && (room.status !== 0 || isFull)
-            const buttonText = isMember ? '进入房间' : room.status !== 0 ? '游戏中' : isFull ? '已满' : '进入房间'
+            const isAdminUser = user?.role === 'admin'
+            const blocked = !isMember && !isAdminUser && (room.status !== 0 || isFull)
+            const buttonText = isMember ? '进入房间' : isAdminUser ? '旁观' : room.status !== 0 ? '游戏中' : isFull ? '已满' : '进入房间'
 
             return (
               <Card key={room._id} color={ROOM_STATUS_COLOR[room.status] || 'default'}>

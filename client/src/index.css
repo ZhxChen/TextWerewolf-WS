@@ -1426,4 +1426,39 @@ body.theme-night .toast-error { background: #e05a5a; color: #fff; }
   -webkit-overflow-scrolling: touch;
 }
 
+/* ============================================================
+   Inline Settings (Header Bar)
+   ============================================================ */
+.settings-inline {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.settings-inline-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  opacity: 0.8;
+  white-space: nowrap;
+  user-select: none;
+}
+
+.god-view-badge {
+  font-size: 0.75rem;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: rgba(139, 92, 246, 0.15);
+  color: #7c3aed;
+  border: 1px solid rgba(139, 92, 246, 0.35);
+  white-space: nowrap;
+  user-select: none;
+}
+
+.role-mark.mark-god-role {
+  background: rgba(139, 92, 246, 0.18);
+  color: #5b21b6;
+  border: 1px solid rgba(139, 92, 246, 0.35);
+}
+
 

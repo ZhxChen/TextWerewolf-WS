@@ -255,6 +255,13 @@ export function createSocketServer(httpServer) {
               wolfSocket.emit('chatMessage', newMessage)
             }
           }
+          // Also broadcast to admin spectators
+          const roomSockets = await io.in('room:' + roomId).fetchSockets()
+          for (const rSocket of roomSockets) {
+            if (rSocket.userInfo?.role === 'admin') {
+              rSocket.emit('chatMessage', newMessage)
+            }
+          }
         } else if (channel === 'ghost') {
           // Ghost channel: broadcast only to dead players (excluding those still speaking/waiting last words)
           const deadPlayers = await Player.find({ gameId: String(gameId), status: PLAYER_STATUS.DEAD })
@@ -272,6 +279,13 @@ export function createSocketServer(httpServer) {
               if (dpSocket) {
                 dpSocket.emit('chatMessage', newMessage)
               }
+            }
+          }
+          // Also broadcast to admin spectators
+          const roomSockets = await io.in('room:' + roomId).fetchSockets()
+          for (const rSocket of roomSockets) {
+            if (rSocket.userInfo?.role === 'admin') {
+              rSocket.emit('chatMessage', newMessage)
             }
           }
         }

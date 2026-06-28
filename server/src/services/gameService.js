@@ -85,10 +85,10 @@ export async function createNewGame(roomId, config = {}) {
   return game
 }
 
-export async function getPlayerInfoInGame(gameId, currentUsername, isOb = false) {
+export async function getPlayerInfoInGame(gameId, currentUsername, isOb = false, isAdmin = false) {
   const game = await Game.findById(gameId)
   const players = await Player.find({ gameId: String(gameId) }).sort({ position: 1 })
-  const revealAll = game?.status === GAME_STATUS.FINISHED
+  const revealAll = game?.status === GAME_STATUS.FINISHED || isAdmin
   const currentPlayer = players.find((player) => player.username === currentUsername) || null
   const checkedTargets = new Set()
 
@@ -129,7 +129,7 @@ export async function getPlayerInfoInGame(gameId, currentUsername, isOb = false)
       status: p.status,
       outReason: p.outReason,
       isSelf,
-      isTarget: isTarget(p, currentUsername, visionStatus, isOb)
+      isTarget: isAdmin ? false : isTarget(p, currentUsername, visionStatus, isOb)
     }
   })
 }

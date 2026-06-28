@@ -1,6 +1,6 @@
 import { useEffect, useCallback, useRef, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
-import { Card, Button, Modal, Divider, Input } from 'animal-island-ui'
+import { Card, Button, Modal, Divider, Input, Switch } from 'animal-island-ui'
 import { useNavigate, useParams } from 'react-router-dom'
 import { getRoomInfo, joinRoom, quitRoom, deleteRoom } from '../api/room'
 import {
@@ -24,6 +24,7 @@ import {
 } from '../api/game'
 import { useAuthStore } from '../stores/useAuthStore'
 import { useGameStore } from '../stores/useGameStore'
+import { useSettingsStore } from '../stores/useSettingsStore'
 import { useWebSocket } from '../hooks/useWebSocket'
 import { useToast } from '../components/Toast'
 
@@ -84,7 +85,9 @@ export default function RoomPage() {
   const { roomId } = useParams()
   const navigate = useNavigate()
   const user = useAuthStore((s) => s.user)
+  const isAdmin = user?.role === 'admin'
   const { showToast } = useToast()
+  const { reduceRoleColor, setReduceRoleColor } = useSettingsStore()
 
   const [chatMessages, setChatMessages] = useState([])
   const [chatInput, setChatInput] = useState('')
@@ -389,6 +392,7 @@ export default function RoomPage() {
 
   // Keep activeSidebarTab valid for the current player state
   useEffect(() => {
+    if (isAdmin) return
     if (activeSidebarTab === 'wolf' && (currentRole.role !== 'wolf' || currentRole.status === 0)) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setActiveSidebarTab('public')
@@ -405,7 +409,7 @@ export default function RoomPage() {
     if (activeSidebarTab === 'ghost' && (currentRole.status !== 0 || isSpeakingOrWaitingLastWordsVal)) {
       setActiveSidebarTab('public')
     }
-  }, [currentRole.role, currentRole.status, activeSidebarTab, gameDetail.stage, gameDetail.lastWordPlayers, gameDetail.currentLastWordPosition, currentRole.position])
+  }, [isAdmin, currentRole.role, currentRole.status, activeSidebarTab, gameDetail.stage, gameDetail.lastWordPlayers, gameDetail.currentLastWordPosition, currentRole.position])
 
   // Accumulate witch action marks across all days
   useEffect(() => {
@@ -504,6 +508,11 @@ export default function RoomPage() {
           }
         }
       })
+      return
+    }
+    // Admin spectators just navigate away — no seat to vacate
+    if (isAdmin) {
+      navigate('/')
       return
     }
     try {
@@ -763,7 +772,7 @@ export default function RoomPage() {
   }
 
   const isRoomOwner = roomDetail.owner === user?.username
-  const canManageRoom = isRoomOwner || user?.role === 'admin'
+  const canManageRoom = isRoomOwner || isAdmin
   const isSeated = roomDetail.seat?.some((s) => s.player === user?.username)
   const currentSpeakerPosition = Number(gameDetail.currentSpeakerPosition)
   const isCurrentSpeaker = Number(currentRole.position) === currentSpeakerPosition
@@ -865,8 +874,8 @@ export default function RoomPage() {
     ? chatMessages.filter((msg) => msg.channel === activeSidebarTab)
     : []
   const isGameActive = roomDetail.status === 1 && !!gameDetail._id
-  const showWolfTab = currentRole.role === 'wolf' && currentRole.status === 1
-  const showGhostTab = currentRole.status === 0 && !isSpeakingOrWaitingLastWords
+  const showWolfTab = (currentRole.role === 'wolf' && currentRole.status === 1) || (isAdmin && isGameActive)
+  const showGhostTab = (currentRole.status === 0 && !isSpeakingOrWaitingLastWords) || (isAdmin && isGameActive)
   const visibleChatTabs = [
     { key: 'public', label: '公开' },
     showWolfTab && { key: 'wolf', label: '狼人' },
@@ -915,8 +924,13 @@ export default function RoomPage() {
       }
     }
 
-    if (currentRole.role === 'wolf' && !player.isSelf && player.camp === 0 && player.status === 1) {
+    if (currentRole.role === 'wolf' && !player.isSelf && player.camp === 0 && player.status === 1 && !reduceRoleColor) {
       marks.push(<span key="wolfmate" className="role-mark mark-wolfmate">🐺 狼队</span>)
+    }
+
+    // God view: show role name badge for each player
+    if (isAdmin && player.roleName && !reduceRoleColor) {
+      marks.push(<span key="role" className="role-mark mark-god-role">{player.roleName}</span>)
     }
 
     return marks.length > 0 ? <div className="role-marks">{marks}</div> : null
@@ -964,6 +978,17 @@ export default function RoomPage() {
             <span className="game-timer">
               ⏱ {timerTime}s
             </span>
+          )}
+          <div className="settings-inline">
+            <Switch
+              size="small"
+              checked={reduceRoleColor}
+              onChange={setReduceRoleColor}
+            />
+            <span className="settings-inline-label">隐匿颜色</span>
+          </div>
+          {isAdmin && (
+            <span className="god-view-badge">👁 上帝视角</span>
           )}
           {canManageRoom && gameDetail._id && gameDetail.status === 1 && (
             <Button size="small" type="primary" onClick={handleRestartGame}>重开</Button>
@@ -1044,9 +1069,14 @@ export default function RoomPage() {
                       && (gameDetail.lastWordPlayers || []).includes(Number(player.position))
                     let cardColor = isDead ? PLAYER_CARD_COLOR.dead : 'default'
                     if (!isDead && isSelf && currentRole.role) {
-                      cardColor = PLAYER_CARD_COLOR[currentRole.role] || 'default'
+                      cardColor = reduceRoleColor
+                        ? PLAYER_CARD_COLOR.villager
+                        : (PLAYER_CARD_COLOR[currentRole.role] || 'default')
+                    } else if (!isDead && isAdmin && player.role && !reduceRoleColor) {
+                      // God view: color by actual role
+                      cardColor = PLAYER_CARD_COLOR[player.role] || 'default'
                     } else if (!isDead && player.camp === 0 && (gameDetail.status === 2 || isSelf || currentRole.role === 'wolf')) {
-                      cardColor = 'app-red'
+                      cardColor = reduceRoleColor ? 'default' : 'app-red'
                     }
 
                     // Wolf targeting indicators (only visible to alive wolves during WOLF_STAGE)
@@ -1519,7 +1549,7 @@ export default function RoomPage() {
                         <div className="seat-position-badge">{seat.position}</div>
                         <div className="seat-player-name">{seat.player ? seat.name : '空座位'}</div>
                         <div className="seat-action-area">
-                          {!seat.player && (
+                          {!seat.player && !isAdmin && (
                             <Button size="small" type="primary" block onClick={() => handleSitDown(seat.position)}>
                               落座
                             </Button>

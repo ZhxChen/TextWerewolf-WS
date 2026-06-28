@@ -104,8 +104,9 @@ export async function gameInfo(ctx) {
   const username = ctx.userInfo.username
   const currentPlayer = await Player.findOne({ roomId: game.roomId, gameId: String(gameId), username })
   const isObserver = !currentPlayer && isOb(room, username)
+  const isAdminSpectator = ctx.userInfo.role === 'admin' && !currentPlayer
 
-  const playerInfo = await gameService.getPlayerInfoInGame(gameId, username, isObserver)
+  const playerInfo = await gameService.getPlayerInfoInGame(gameId, username, isObserver, isAdminSpectator)
   const skillInfo = await gameService.getSkillStatusInGame(gameId, username)
   const broadcast = await gameService.getBroadcastInfo(gameId)
   const action = await gameService.getActionStatusInGame(gameId, username)
@@ -125,20 +126,17 @@ export async function gameInfo(ctx) {
 
   const wolfSelections = (
     game.stage === GAME_STAGE.WOLF_STAGE
-    && currentPlayer?.role === GAME_ROLE.WOLF
-    && currentPlayer?.status === PLAYER_STATUS.ALIVE
+    && (isAdminSpectator || (currentPlayer?.role === GAME_ROLE.WOLF && currentPlayer?.status === PLAYER_STATUS.ALIVE))
   ) ? (cache.get(`wolf-selections-${gameId}`) || {}) : null
 
   const predictorSelection = (
     game.stage === GAME_STAGE.PREDICTOR_STAGE
-    && currentPlayer?.role === GAME_ROLE.PREDICTOR
-    && currentPlayer?.status === PLAYER_STATUS.ALIVE
+    && (isAdminSpectator || (currentPlayer?.role === GAME_ROLE.PREDICTOR && currentPlayer?.status === PLAYER_STATUS.ALIVE))
   ) ? (cache.get(`predictor-selection-${gameId}`) || null) : null
 
   const witchSelections = (
     game.stage === GAME_STAGE.WITCH_STAGE
-    && currentPlayer?.role === GAME_ROLE.WITCH
-    && currentPlayer?.status === PLAYER_STATUS.ALIVE
+    && (isAdminSpectator || (currentPlayer?.role === GAME_ROLE.WITCH && currentPlayer?.status === PLAYER_STATUS.ALIVE))
   ) ? (cache.get(`witch-selections-${gameId}`) || { antidote: false, poisonTargetUsername: null }) : null
 
   const remainingTime = cache.get('game-time-' + gameId) ?? null
@@ -946,6 +944,14 @@ export async function getChatHistory(ctx) {
   }
   const currentUser = ctx.userInfo
   const currentPlayer = await Player.findOne({ roomId, gameId: String(gameId), username: currentUser.username })
+
+  // Admin spectators can see all channels
+  if (currentUser.role === 'admin' && !currentPlayer) {
+    const messages = await ChatMessage.find({ roomId, gameId: String(gameId) }).sort({ createdAt: 1 })
+    ctx.body = Result.success(messages)
+    return
+  }
+
   if (!currentPlayer) {
     ctx.body = Result.fail(-1, '未查询到你在该游戏中')
     return
