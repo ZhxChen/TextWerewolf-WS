@@ -47,7 +47,7 @@ export async function clearSeat(roomId, username) {
   if (idx !== -1) {
     const newSeats = [...room.seats]
     newSeats[idx] = null
-    await Room.findByIdAndUpdate(roomId, { seats: newSeats })
+    await Room.findByIdAndUpdate(roomId, { seats: newSeats, lastActivityAt: new Date() })
     io?.to('lobby').emit('refreshLobby')
   }
 }
@@ -96,6 +96,11 @@ export async function verifyAndUpgradeRoomPassword(roomInstance, password) {
   return true
 }
 
+export async function touchRoomActivity(roomId) {
+  if (roomId === undefined || roomId === null || roomId === '') return
+  await Room.updateOne({ _id: roomId }, { $set: { lastActivityAt: new Date() } })
+}
+
 export async function findObserverRoomByPassword(password) {
   if (isEmpty(password)) return null
 
@@ -132,7 +137,7 @@ export async function clearOfflineSeats(roomId) {
     return { room, clearedUsernames }
   }
 
-  const updatedRoom = await Room.findByIdAndUpdate(roomId, { seats: nextSeats }, { new: true })
+  const updatedRoom = await Room.findByIdAndUpdate(roomId, { seats: nextSeats, lastActivityAt: new Date() }, { new: true })
   io?.to('lobby').emit('refreshLobby')
   for (const username of clearedUsernames) {
     const timer = disconnectTimers.get(username)

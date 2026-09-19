@@ -7,7 +7,7 @@ const roomSchema = new mongoose.Schema({
   name: { type: String, default: '狼人杀房间' },
   status: { type: Number, default: 0 },
   gameId: { type: String, default: null },
-  password: { type: String, required: true },
+  password: { type: String, default: null },
   owner: { type: String, required: true },
   seats: { type: [String], default: [] },
   mode: { type: String, default: DEFAULT_MODE },
@@ -17,7 +17,9 @@ const roomSchema = new mongoose.Schema({
   remark: { type: String },
   nightActionTime: { type: Number, default: 15 },
   speakActionTime: { type: Number, default: 60 },
-  voteActionTime: { type: Number, default: 30 }
+  voteActionTime: { type: Number, default: 30 },
+  chatRateLimit: { type: Boolean, default: true },
+  lastActivityAt: { type: Date, default: Date.now }
 }, { timestamps: true, collection: 'rooms' })
 
 roomSchema.index({ status: 1 })

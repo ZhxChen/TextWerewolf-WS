@@ -23,15 +23,19 @@ export async function roomList(ctx) {
 }
 
 export async function createRoom(ctx) {
-  const { name, password, mode = 'standard_9', remark, nightActionTime, speakActionTime, voteActionTime } = ctx.request.body
-  if (isEmpty(password)) {
-    ctx.body = Result.fail(-1, '房间密码不能为空')
+  const { name, password, mode = 'standard_9', remark, nightActionTime, speakActionTime, voteActionTime, chatRateLimit } = ctx.request.body
+  const trimmedName = String(name || '').trim()
+  if (trimmedName && (trimmedName.length < 2 || trimmedName.length > 16)) {
+    ctx.body = Result.fail(-1, '房间名需为 2–16 个字')
     return
   }
-  if (!/^[a-zA-Z0-9]{4,8}$/.test(password)) {
+  const rawPassword = typeof password === 'string' ? password.trim() : password
+  const hasPassword = rawPassword !== undefined && rawPassword !== null && rawPassword !== ''
+  if (hasPassword && /^[a-zA-Z0-9]{4,8}$/.test(rawPassword) === false) {
     ctx.body = Result.fail(-1, '密码格式错误，需要4-8位数字或字母')
     return
   }
+  const enableChatRateLimit = chatRateLimit === false || chatRateLimit === 'false' ? false : true
   const existingRoom = await Room.findOne({
     status: { $ne: ROOM_STATUS.INVALID },
     $or: [{ owner: ctx.userInfo.username }, { seats: ctx.userInfo.username }]
@@ -49,8 +53,8 @@ export async function createRoom(ctx) {
   const clampedSpeakTime = Math.min(120, Math.max(30, Number(speakActionTime) || 60))
   const clampedVoteTime = Math.min(30, Math.max(5, Number(voteActionTime) || 30))
   const room = await Room.create({
-    name: name || '狼人杀房间',
-    password: await createPassword(password),
+    name: trimmedName || '狼人杀房间',
+    password: hasPassword ? await createPassword(rawPassword) : null,
     mode,
     count: modeConfig.count,
     owner: ctx.userInfo.username,
@@ -59,7 +63,9 @@ export async function createRoom(ctx) {
     status: ROOM_STATUS.READY,
     nightActionTime: clampedNightTime,
     speakActionTime: clampedSpeakTime,
-    voteActionTime: clampedVoteTime
+    voteActionTime: clampedVoteTime,
+    chatRateLimit: enableChatRateLimit,
+    lastActivityAt: new Date()
   })
   io?.to('lobby').emit('refreshLobby')
   ctx.body = Result.success(room._id)
@@ -188,6 +194,7 @@ export async function joinRoom(ctx) {
     return
   }
 
+  await roomService.touchRoomActivity(id)
   attachSocketToRoom(userSockets.get(username), id)
   io?.to('room:' + id).emit('refreshRoom')
   io?.to('lobby').emit('refreshLobby')
@@ -250,6 +257,8 @@ export async function quitRoom(ctx) {
     ],
     { new: true }
   )
+
+  if (updatedRoom) await roomService.touchRoomActivity(id)
 
   const targetSocket = userSockets.get(targetUsername)
   if (targetSocket && !roomService.canAccessRoom(updatedRoom, targetSocket.userInfo || { username: targetUsername })) {

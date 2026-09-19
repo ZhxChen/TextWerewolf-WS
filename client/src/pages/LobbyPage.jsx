@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Card, Button, Input, Modal, Divider } from 'animal-island-ui'
+import { Card, Button, Input, Modal, Divider, Switch } from 'animal-island-ui'
 import { useNavigate } from 'react-router-dom'
 import { getRoomList, createRoom, joinRoom, getRecentRoom } from '../api/room'
 import { changePassword, updateProfile } from '../api/auth'
@@ -19,6 +19,8 @@ const MODE_OPTIONS = [
   { value: 'standard_6', label: '标准6人局', desc: '2狼 · 预言家 · 女巫 · 2村民' }
 ]
 const getModeLabel = (mode) => MODE_OPTIONS.find((m) => m.value === mode)?.label || mode
+const DEFAULT_CREATE_FORM = { name: '', password: '', enablePassword: false, chatRateLimit: true, mode: 'standard_9', nightActionTime: 15, speakActionTime: 60, voteActionTime: 30 }
+
 
 export default function LobbyPage() {
   const navigate = useNavigate()
@@ -31,7 +33,7 @@ export default function LobbyPage() {
   const [lobbyReady, setLobbyReady] = useState(false)
   const [createModal, setCreateModal] = useState(false)
   const [creating, setCreating] = useState(false)
-  const [form, setForm] = useState({ name: '', password: '', mode: 'standard_9', nightActionTime: 15, speakActionTime: 60, voteActionTime: 30 })
+  const [form, setForm] = useState(DEFAULT_CREATE_FORM)
   // Password entry modal for joining a room
   const [pwdModal, setPwdModal] = useState(null)  // { room }
   const [roomPassword, setRoomPassword] = useState('')
@@ -88,11 +90,30 @@ export default function LobbyPage() {
     fetchRooms()
   }, lobbyReady)
 
+  const openCreateModal = () => {
+    setForm(DEFAULT_CREATE_FORM)
+    setCreateModal(true)
+  }
+
   const handleCreate = async () => {
-    if (!form.password) return
+    const trimmedName = form.name.trim()
+    if (trimmedName && (trimmedName.length < 2 || trimmedName.length > 16)) {
+      showToast('房间名需为 2–16 个字', 'error')
+      return
+    }
+
+    let password = null
+    if (form.enablePassword) {
+      password = form.password.trim()
+      if (/^[a-zA-Z0-9]{4,8}$/.test(password) === false) {
+        showToast('密码需为 4-8 位数字或字母', 'error')
+        return
+      }
+    }
+
     setCreating(true)
     try {
-      const roomId = await createRoom(form)
+      const roomId = await createRoom({ ...form, name: trimmedName, password })
       navigate(`/room/${roomId}`)
     } catch (e) {
       showToast(e.errorMessage || '创建失败', 'error')
@@ -237,7 +258,7 @@ export default function LobbyPage() {
             <Button type="default" onClick={() => navigate('/admin')}>🛡️ 管理后台</Button>
           )}
           <Button type="text" onClick={() => { logout(); navigate('/login') }}>退出</Button>
-          <Button type="primary" onClick={() => setCreateModal(true)}>创建房间</Button>
+          <Button type="primary" onClick={openCreateModal}>创建房间</Button>
           <Button onClick={fetchRooms} loading={loading}>刷新</Button>
         </div>
       </div>
@@ -264,7 +285,7 @@ export default function LobbyPage() {
               <Card key={room._id} color={ROOM_STATUS_COLOR[room.status] || 'default'}>
                 <div className="flex flex-col gap-8">
                   <div className="flex justify-between items-center">
-                    <div className="font-bold" style={{ fontSize: '1rem' }}>{room.name}</div>
+                    <div className="font-bold lobby-room-name" style={{ fontSize: '1rem' }}>{room.name}</div>
                     <div style={{ fontSize: '0.75rem', opacity: 0.8 }}>{ROOM_STATUS_TEXT[room.status]}</div>
                   </div>
                   <div style={{ fontSize: '0.8rem', opacity: 0.8 }}>
@@ -310,20 +331,47 @@ export default function LobbyPage() {
             <Input
               placeholder="狼人杀房间"
               value={form.name}
+              maxLength={16}
               onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
               allowClear
             />
           </div>
           <div>
-            <div className="form-label">
-              房间密码 * <span style={{ fontWeight: 400, opacity: 0.7 }}>（4-8位数字或字母）</span>
+            <div className="flex items-center justify-between">
+              <div className="form-label">房间密码</div>
+              <Switch
+                size="small"
+                checked={form.enablePassword}
+                onChange={(checked) => setForm((f) => ({
+                  ...f,
+                  enablePassword: checked,
+                  password: checked ? f.password : ''
+                }))}
+              />
             </div>
-            <Input
-              placeholder="用于邀请好友，4-8位"
-              value={form.password}
-              onChange={(e) => setForm((f) => ({ ...f, password: e.target.value }))}
-              allowClear
-            />
+            {form.enablePassword && (
+              <Input
+                placeholder="4-8位数字或字母"
+                value={form.password}
+                maxLength={8}
+                onChange={(e) => setForm((f) => ({ ...f, password: e.target.value }))}
+                allowClear
+                style={{ marginTop: 8 }}
+              />
+            )}
+          </div>
+          <div>
+            <div className="flex items-center justify-between">
+              <div className="form-label">聊天限流</div>
+              <Switch
+                size="small"
+                checked={form.chatRateLimit}
+                onChange={(checked) => setForm((f) => ({ ...f, chatRateLimit: checked }))}
+              />
+            </div>
+            <div className="form-hint" style={{ fontSize: '0.8rem', marginTop: 4 }}>
+              防止刷屏，与发言回合无关
+            </div>
           </div>
           <div>
             <div className="form-label">游戏模式</div>
@@ -412,7 +460,7 @@ export default function LobbyPage() {
       {/* 房间密码输入 Modal */}
       <Modal
         open={!!pwdModal}
-        title={`进入房间 — ${pwdModal?.room?.name}`}
+        title={<span className="ellipsis-title">进入房间 — {pwdModal?.room?.name || ''}</span>}
         onClose={() => setPwdModal(null)}
         typewriter={false}
         footer={(

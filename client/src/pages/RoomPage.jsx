@@ -77,6 +77,7 @@ const STAGE_NAMES = {
 
 const TEXT_LEVEL_COLORS = { 1: '', 2: 'color-red', 3: 'color-green', 4: 'color-blue', 5: 'color-pink', 6: 'color-orange' }
 const MODE_LABELS = { standard_9: '9人局', standard_6: '6人局' }
+const CHAT_TAB_LABELS = { public: '💬 公开', wolf: '🐺 狼人', ghost: '☠️ 亡灵', record: '📜 记录' }
 const getModeLabel = (mode) => MODE_LABELS[mode] || mode
 const VOTE_STAGES = new Set([6, 6.5])
 const SELF_ADVANCE_STAGE_BY_ROLE = {}
@@ -92,6 +93,7 @@ export default function RoomPage() {
   const [chatMessages, setChatMessages] = useState([])
   const [chatInput, setChatInput] = useState('')
   const [activeSidebarTab, setActiveSidebarTab] = useState('public')
+  const [unreadByChannel, setUnreadByChannel] = useState({ public: false, wolf: false, ghost: false, record: false })
   const [wolfSelections, setWolfSelections] = useState({})
   const [predictorSelection, setPredictorSelection] = useState(null)
   const [witchSelections, setWitchSelections] = useState({ antidote: false, poisonTargetUsername: null })
@@ -185,6 +187,7 @@ export default function RoomPage() {
   const prevStageRef = useRef(null)
   const overlayTimerRef = useRef(null)
   const drawerOpenRef = useRef(false)
+  const activeSidebarTabRef = useRef('public')
 
   const closeActionModal = useCallback(() => {
     setActionModal(false)
@@ -331,7 +334,13 @@ export default function RoomPage() {
             if (data._id && prev.some((msg) => msg._id === data._id)) return prev
             return [...prev, data]
           })
-          if (!drawerOpenRef.current) {
+          const msgChannel = data.channel || 'public'
+          if (msgChannel === activeSidebarTabRef.current) {
+            setUnreadByChannel((prev) => (prev[msgChannel] ? { ...prev, [msgChannel]: false } : prev))
+          } else {
+            setUnreadByChannel((prev) => ({ ...prev, [msgChannel]: true }))
+          }
+          if (drawerOpenRef.current === false) {
             setHasNewMessage(true)
           }
         }
@@ -365,7 +374,8 @@ export default function RoomPage() {
         }
         break
       case 'roomClosed':
-        fetchRoomDetail()
+        showToast('房间因长时间不活动已关闭', 'error')
+        navigate('/')
         break
       case 'roomDeleted':
         showToast('房间已被删除', 'error')
@@ -470,6 +480,10 @@ export default function RoomPage() {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     if (drawerOpen) setHasNewMessage(false)
   }, [drawerOpen])
+
+  useEffect(() => {
+    activeSidebarTabRef.current = activeSidebarTab
+  }, [activeSidebarTab])
 
   const handleSendChatMessage = (e) => {
     if (e) e.preventDefault()
@@ -883,10 +897,28 @@ export default function RoomPage() {
     isGameActive && { key: 'record', label: '记录' }
   ].filter(Boolean)
 
+  const clearUnread = (key) => {
+    setUnreadByChannel((prev) => (prev[key] ? { ...prev, [key]: false } : prev))
+  }
+
   const selectChatTab = (key) => {
+    clearUnread(key)
     if (key === 'record') handleOpenRecordTab()
     else setActiveSidebarTab(key)
   }
+
+  const cycleChatTabBy = (delta = 1) => {
+    if (visibleChatTabs.length === 0) return
+    const currentIndex = visibleChatTabs.findIndex((tab) => tab.key === activeSidebarTab)
+    const start = currentIndex < 0 ? 0 : currentIndex
+    const nextIndex = (start + delta + visibleChatTabs.length) % visibleChatTabs.length
+    selectChatTab(visibleChatTabs[nextIndex].key)
+  }
+
+  const visibleChatTabKeys = visibleChatTabs.map((tab) => tab.key)
+  const hasUnreadChannel = Object.entries(unreadByChannel).some(([key, value]) => (key === activeSidebarTab ? false : (visibleChatTabKeys.includes(key) ? value : false)))
+  const activeChatChannelClass = activeSidebarTab === 'wolf' ? 'chat-tab-wolf' : activeSidebarTab === 'ghost' ? 'chat-tab-ghost' : activeSidebarTab === 'record' ? 'chat-tab-record' : 'chat-tab-public'
+  const chatCycleButtonClass = reduceRoleColor ? 'chat-tab chat-channel-cycle-btn chat-tab-neutral' : `chat-tab chat-channel-cycle-btn active ${activeChatChannelClass}`
 
   const handleChatTabKeyDown = (e) => {
     const currentIndex = visibleChatTabs.findIndex((tab) => tab.key === activeSidebarTab)
@@ -902,6 +934,8 @@ export default function RoomPage() {
     e.preventDefault()
     selectChatTab(visibleChatTabs[nextIndex].key)
   }
+
+  const canCycleChatTabs = visibleChatTabs.length > 1
 
   const renderRoleMarks = (player) => {
     if (player.isSelf) return null
@@ -962,12 +996,12 @@ export default function RoomPage() {
           onClick={() => setDrawerOpen((v) => !v)}
         >
           💬
-          {hasNewMessage && <span className="fab-badge" aria-hidden="true" />}
+          {(hasNewMessage || hasUnreadChannel) && <span className={`fab-badge${reduceRoleColor ? ' neutral' : ''}`} aria-hidden="true" />}
         </button>
       )}
       <div className="game-header">
         <div>
-          <strong>{roomDetail.name || '狼人杀房间'}</strong>
+          <strong className="room-header-name">{roomDetail.name || '狼人杀房间'}</strong>
           <span className="game-header-meta">
             {roomDetail.hasPassword ? '🔒 已设密码' : '🔓 无密码'}
             {' | '}{getModeLabel(roomDetail.mode)}
@@ -1227,7 +1261,7 @@ export default function RoomPage() {
                             {isSelf && currentRole.role && (
                               <div className="player-role-badge">{ROLE_NAMES[currentRole.role]}</div>
                             )}
-                            {!isSelf && player.campName && (
+                            {isSelf === false && player.campName && (
                               <div style={{ fontSize: '0.72rem', opacity: 0.85, fontWeight: 600 }}>{player.campName}</div>
                             )}
                             {playerIsCurrentSpeaker && (
@@ -1327,56 +1361,52 @@ export default function RoomPage() {
 
           {/* Right panel: Chat Sidebar */}
           <div id="room-chat-sidebar" className={`room-sidebar${drawerOpen ? ' drawer-open' : ''}`}>
-            <div className="chat-tabs" role="tablist" aria-label="聊天频道" onKeyDown={handleChatTabKeyDown}>
-              <button
-                id="chat-tab-public"
-                className={`chat-tab chat-tab-public ${activeSidebarTab === 'public' ? 'active' : ''}`}
-                role="tab"
-                aria-selected={activeSidebarTab === 'public'}
-                aria-controls="chat-panel-public"
-                tabIndex={activeSidebarTab === 'public' ? 0 : -1}
-                onClick={() => selectChatTab('public')}
-              >
-                💬 公开
-              </button>
-              {showWolfTab && (
+            <div className="chat-channel-cycle">
+              <div className="chat-channel-switcher" onKeyDown={handleChatTabKeyDown}>
                 <button
-                  id="chat-tab-wolf"
-                  className={`chat-tab chat-tab-wolf ${activeSidebarTab === 'wolf' ? 'active' : ''}`}
-                  role="tab"
-                  aria-selected={activeSidebarTab === 'wolf'}
-                  aria-controls="chat-panel-wolf"
-                  tabIndex={activeSidebarTab === 'wolf' ? 0 : -1}
-                  onClick={() => selectChatTab('wolf')}
+                  type="button"
+                  className="chat-channel-arrow"
+                  aria-label="上一个频道"
+                  disabled={!canCycleChatTabs}
+                  onClick={() => cycleChatTabBy(-1)}
                 >
-                  🐺 狼人
+                  ‹
                 </button>
-              )}
-              {showGhostTab && (
                 <button
-                  id="chat-tab-ghost"
-                  className={`chat-tab chat-tab-ghost ${activeSidebarTab === 'ghost' ? 'active' : ''}`}
-                  role="tab"
-                  aria-selected={activeSidebarTab === 'ghost'}
-                  aria-controls="chat-panel-ghost"
-                  tabIndex={activeSidebarTab === 'ghost' ? 0 : -1}
-                  onClick={() => selectChatTab('ghost')}
+                  type="button"
+                  id="chat-tab-current"
+                  className={chatCycleButtonClass}
+                  aria-label={`当前频道 ${CHAT_TAB_LABELS[activeSidebarTab] || activeSidebarTab}，点击切换下一个`}
+                  aria-controls={`chat-panel-${activeSidebarTab}`}
+                  disabled={!canCycleChatTabs}
+                  onClick={() => cycleChatTabBy(1)}
                 >
-                  ☠️ 亡灵
+                  <span>{CHAT_TAB_LABELS[activeSidebarTab] || '聊天'}</span>
+                  {canCycleChatTabs && <span className="chat-channel-swap-icon" aria-hidden="true">⇄</span>}
+                  {hasUnreadChannel && <span className={`unread-dot${reduceRoleColor ? ' neutral' : ''}`} aria-hidden="true" />}
                 </button>
-              )}
-              {isGameActive && (
                 <button
-                  id="chat-tab-record"
-                  className={`chat-tab chat-tab-record ${activeSidebarTab === 'record' ? 'active' : ''}`}
-                  role="tab"
-                  aria-selected={activeSidebarTab === 'record'}
-                  aria-controls="chat-panel-record"
-                  tabIndex={activeSidebarTab === 'record' ? 0 : -1}
-                  onClick={() => selectChatTab('record')}
+                  type="button"
+                  className="chat-channel-arrow"
+                  aria-label="下一个频道"
+                  disabled={!canCycleChatTabs}
+                  onClick={() => cycleChatTabBy(1)}
                 >
-                  📜 记录
+                  ›
                 </button>
+              </div>
+              {canCycleChatTabs && (
+                <div className="chat-channel-guide">
+                  <span className="chat-channel-hint">点击切换频道</span>
+                  <div className="chat-channel-dots" aria-hidden="true">
+                    {visibleChatTabs.map((tab) => (
+                      <span
+                        key={tab.key}
+                        className={`chat-channel-dot${tab.key === activeSidebarTab ? ' active' : ''}${unreadByChannel[tab.key] && tab.key !== activeSidebarTab ? ' unread' : ''}${reduceRoleColor ? ' neutral' : ''}`}
+                      />
+                    ))}
+                  </div>
+                </div>
               )}
             </div>
 
@@ -1385,7 +1415,7 @@ export default function RoomPage() {
                 id="chat-panel-record"
                 className="sidebar-record-panel"
                 role="tabpanel"
-                aria-labelledby="chat-tab-record"
+                aria-labelledby="chat-tab-current"
               >
                 {gameRecordList.length === 0 ? (
                   <div style={{ textAlign: 'center', color: 'rgba(114, 93, 66, 0.5)', fontSize: '0.85rem', marginTop: 20 }}>
@@ -1401,7 +1431,7 @@ export default function RoomPage() {
                   id={`chat-panel-${activeSidebarTab}`}
                   className="chat-messages-container"
                   role="tabpanel"
-                  aria-labelledby={`chat-tab-${activeSidebarTab}`}
+                  aria-labelledby="chat-tab-current"
                 >
                   <div className="chat-message-log" role="log" aria-live="polite" aria-relevant="additions">
                   {filteredMessages.length === 0 ? (
@@ -1411,8 +1441,8 @@ export default function RoomPage() {
                   ) : (
                     filteredMessages.map((msg, i) => {
                       const isSelf = msg.sender === user?.username
-                      const isWolfChannel = msg.channel === 'wolf'
-                      const isGhostChannel = msg.channel === 'ghost'
+                      const isWolfChannel = msg.channel === 'wolf' && reduceRoleColor === false
+                      const isGhostChannel = msg.channel === 'ghost' && reduceRoleColor === false
 
                       let bubbleBg = 'rgba(255, 255, 255, 0.8)'
                       let bubbleBorder = '1px solid rgba(114, 93, 66, 0.15)'
@@ -1501,11 +1531,11 @@ export default function RoomPage() {
                     />
                   </div>
                   <Button
-                    type={activeSidebarTab === 'ghost' ? 'default' : 'primary'}
-                    danger={activeSidebarTab === 'wolf'}
+                    type={activeSidebarTab === 'ghost' && reduceRoleColor === false ? 'default' : 'primary'}
+                    danger={activeSidebarTab === 'wolf' && reduceRoleColor === false}
                     disabled={isChatMuted || !chatInput.trim()}
                     onClick={handleSendChatMessage}
-                    style={activeSidebarTab === 'ghost' ? { background: '#7b1fa2', color: '#fff', border: 'none' } : {}}
+                    style={activeSidebarTab === 'ghost' && reduceRoleColor === false ? { background: '#7b1fa2', color: '#fff', border: 'none' } : {}}
                   >
                     发送
                   </Button>

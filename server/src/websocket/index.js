@@ -8,6 +8,7 @@ import logger from '../utils/logger.js'
 
 import { autoAdvanceSpeaker } from '../services/gameService.js'
 import * as roomService from '../services/roomService.js'
+import { tryConsume } from '../utils/chatRateLimit.js'
 
 async function restoreRoomSelections(socket, room) {
   const { username } = socket.userInfo || {}
@@ -230,6 +231,22 @@ export function createSocketServer(httpServer) {
         } else {
           socket.emit('chatError', '未知频道')
           return
+        }
+
+        // Chat anti-spam: checked after permissions so wrong-channel attempts do not consume the quota.
+        const rateLimitCacheKey = 'room-chat-rate-limit-' + roomId
+        let roomChatRateLimit = cache.get(rateLimitCacheKey)
+        if (roomChatRateLimit === undefined) {
+          const room = await Room.findById(roomId).select('chatRateLimit')
+          roomChatRateLimit = room?.chatRateLimit === false ? false : true
+          cache.set(rateLimitCacheKey, roomChatRateLimit, 60)
+        }
+        if (roomChatRateLimit) {
+          const { ok } = tryConsume(username, String(roomId))
+          if (ok === false) {
+            socket.emit('chatError', '发言过于频繁，请稍后再试')
+            return
+          }
         }
 
         // Save message to database
